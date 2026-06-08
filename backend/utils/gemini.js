@@ -11,7 +11,7 @@ export const getEmbedding = async (text) => {
       return generateMockEmbedding(text);
     }
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
+    const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
     const result = await model.embedContent(text);
     if (result && result.embedding && result.embedding.values) {
       return result.embedding.values;
@@ -58,7 +58,7 @@ export const generateAssistantResponse = async (cartItems, messageHistory, userM
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash",
       generationConfig: { responseMimeType: "application/json" }
     });
 
