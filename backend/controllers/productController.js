@@ -1,5 +1,6 @@
 import {v2 as cloudinary} from 'cloudinary';
 import productModel from '../models/productModel.js'
+import { getEmbedding, cosineSimilarity } from '../utils/gemini.js';
 
 
 //Function for added product
@@ -23,6 +24,10 @@ const addProduct = async (req, res)=>{
       })
     )
 
+    // Generate embedding for the product
+    const embedText = `Name: ${name}. Category: ${category} / ${subCategory}. Description: ${description}`;
+    const embedding = await getEmbedding(embedText);
+
     const productData = {
       name,
       description,
@@ -32,6 +37,7 @@ const addProduct = async (req, res)=>{
       bestseller: bestseller === "true" ? true : false,
       sizes:JSON.parse(sizes),
       image: imagesUrl,
+      embedding,
       date: Date.now()
     }
     
@@ -95,4 +101,51 @@ const singleProduct = async (req, res)=>{
 
 }
 
-export {addProduct, listProduct, removeProduct, singleProduct};
+//Function for semantic search
+const searchProducts = async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query) {
+      return res.json({ success: false, message: "Query parameter is required" });
+    }
+
+    // Generate embedding for the query
+    const queryEmbedding = await getEmbedding(query);
+
+    // Fetch all products
+    const products = await productModel.find({});
+
+    // Calculate similarity scores
+    const productsWithScore = products.map(product => {
+      let score = 0;
+      if (product.embedding && product.embedding.length > 0) {
+        score = cosineSimilarity(queryEmbedding, product.embedding);
+      } else {
+        // Fallback simple word overlap logic if embeddings are missing
+        const queryTerms = query.toLowerCase().split(/\s+/);
+        const nameLower = product.name.toLowerCase();
+        const descLower = product.description.toLowerCase();
+        let matches = 0;
+        queryTerms.forEach(term => {
+          if (nameLower.includes(term)) matches += 2;
+          if (descLower.includes(term)) matches += 1;
+        });
+        score = matches / (queryTerms.length * 3);
+      }
+      return {
+        ...product.toObject(),
+        similarityScore: score
+      };
+    });
+
+    // Sort by similarity score descending
+    productsWithScore.sort((a, b) => b.similarityScore - a.similarityScore);
+
+    res.json({ success: true, products: productsWithScore });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+}
+
+export {addProduct, listProduct, removeProduct, singleProduct, searchProducts};

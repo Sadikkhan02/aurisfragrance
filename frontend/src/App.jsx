@@ -1,7 +1,7 @@
 import React from 'react'
 import { Route, Routes } from 'react-router-dom';
 import Home from './pages/Home';
-import Collection from './pages/Collection';
+// import Collection from './pages/Collection';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import Product from './pages/Product';
@@ -12,10 +12,14 @@ import Orders from './pages/Orders';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import SearchBar from './components/SearchBar';
+import AIAssistant from './components/AIAssistant';
 import { ToastContainer } from 'react-toastify';
 import Verify from './pages/Verify';
 
+const Collection = React.lazy(() => import('./pages/Collection'));
+
 const App = () => {
+
   return (
     <div className='px-4 sm:px-[5vw] md:px-[7vw] lg:px-[9vw]'>
       <ToastContainer/>
@@ -33,9 +37,10 @@ const App = () => {
         <Route path='/orders' element={<Orders/>} />
         <Route path='/verify' element={<Verify/>} />
       </Routes>
+      <AIAssistant />
       <Footer/>
     </div>
   )
 }
 
-export default App
+export default App;

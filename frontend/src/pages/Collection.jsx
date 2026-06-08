@@ -3,15 +3,18 @@ import { ShopContext } from '../context/ShopContext';
 import { assets } from '../assets/assets';
 import Title from '../components/Title';
 import ProductItem from '../components/ProductItem';
+import axios from 'axios';
 
 const Collection = () => {
 
-   const {products, search, showSearch} = useContext(ShopContext);
+   const {products, search, showSearch, backendUrl} = useContext(ShopContext);
    const [showFilter, setShowFilter] = useState(false);
    const [filterProducts, setFilterProducts] = useState(products);
    const [category, setCategory] = useState([]);
    const [subCategory, setSubCategory] = useState([]);
    const [sortType, setSortType] = useState('relavant');
+   const [semanticProducts, setSemanticProducts] = useState([]);
+   const [isAiSearching, setIsAiSearching] = useState(false);
 
 
    const toggleCategory = (e) => {
@@ -37,8 +40,16 @@ const Collection = () => {
    const applyFilter = () => {
       let productsCopy = products.slice();
 
-      if(showSearch && search){
-        productsCopy = productsCopy.filter(item => item.name.toLowerCase().includes(search.toLowerCase()));
+      if (showSearch && search.trim()) {
+         if (semanticProducts.length > 0) {
+            productsCopy = semanticProducts;
+         } else {
+            // Client-side fallback if semantic search hasn't loaded or failed
+            productsCopy = productsCopy.filter(item => 
+               item.name.toLowerCase().includes(search.toLowerCase()) ||
+               item.description.toLowerCase().includes(search.toLowerCase())
+            );
+         }
       }
 
       if(category.length > 0){
@@ -66,9 +77,35 @@ const Collection = () => {
     }
    }
 
-    useEffect(()=>{
+   // Debounced effect for semantic search
+   useEffect(() => {
+      if (!showSearch || !search.trim()) {
+         setSemanticProducts([]);
+         return;
+      }
+
+      const delayDebounceFn = setTimeout(async () => {
+         setIsAiSearching(true);
+         try {
+            const response = await axios.get(`${backendUrl}/api/product/search`, {
+               params: { query: search }
+            });
+            if (response.data.success) {
+               setSemanticProducts(response.data.products);
+            }
+         } catch (error) {
+            console.error("Semantic search failed, falling back to local search:", error);
+         } finally {
+            setIsAiSearching(false);
+         }
+      }, 500);
+
+      return () => clearTimeout(delayDebounceFn);
+   }, [search, showSearch, backendUrl]);
+
+   useEffect(()=>{
       applyFilter();
-   },[category, subCategory, search, showSearch,products]);
+   },[category, subCategory, search, showSearch, products, semanticProducts]);
 
    useEffect(()=>{
       sortProducts();
@@ -120,7 +157,15 @@ const Collection = () => {
       {/* Right Side */}
       <div className='flex-1'>
         <div className='flex justify-between text-base sm:text-2xl mb-4'>
-          <Title text1={'ALL'} text2={'COLLECTIONS'}/>
+          <div className='flex flex-col gap-1'>
+            <Title text1={'ALL'} text2={'COLLECTIONS'}/>
+            {showSearch && search.trim() && (
+              <span className='text-xs font-semibold text-teal-600 flex items-center gap-1.5 mt-1 animate-pulse'>
+                <span className='w-2 h-2 bg-teal-500 rounded-full inline-block animate-ping'></span>
+                {isAiSearching ? "AI is searching matches..." : "Sorted by AI conceptual matching"}
+              </span>
+            )}
+          </div>
           {/* Product Sort */}
           <select onChange={(e)=>setSortType(e.target.value)} className='border-2 border-gray-300 text-sm px-2'>
             <option value="relavant">Sort by: Relavent</option>
