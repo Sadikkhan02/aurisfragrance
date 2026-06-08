@@ -65,11 +65,14 @@ const AIAssistant = () => {
     try {
       const activeCart = getCartDetails();
       
-      // Prepare message history in format required by backend
-      const history = updatedMessages.slice(0, -1).map((msg) => ({
-        role: msg.role,
-        text: msg.text
-      }));
+      // Build history: exclude the current user message (last item) and any
+      // leading model messages (like the initial greeting) since Gemini requires
+      // history to start with a 'user' role message.
+      const allPrevious = updatedMessages.slice(0, -1);
+      const firstUserIdx = allPrevious.findIndex((m) => m.role === "user");
+      const history = firstUserIdx >= 0
+        ? allPrevious.slice(firstUserIdx).map((msg) => ({ role: msg.role, text: msg.text }))
+        : [];
 
       const response = await axios.post(`${backendUrl}/api/ai/assistant`, {
         cartItems: activeCart,

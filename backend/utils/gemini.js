@@ -56,12 +56,7 @@ export const generateAssistantResponse = async (cartItems, messageHistory, userM
       };
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      generationConfig: { responseMimeType: "application/json" }
-    });
-
+    // 1. Build catalog & system instruction first
     const catalogSummary = catalog.map(p => ({
       id: p._id,
       name: p.name,
@@ -93,15 +88,32 @@ Instructions:
 4. The recommendedProductIds array MUST only contain valid IDs from the Store Inventory Catalog. Limit this to at most 3 IDs.
 5. If the user asks general questions or styles, respond in character as a fashion expert and suggest relevant items.`;
 
-    const chatSession = model.startChat({
-      history: messageHistory.map(m => ({
-        role: m.role === "user" ? "user" : "model",
-        parts: [{ text: m.text }]
-      })),
-      systemInstruction: systemInstruction
+    // 2. Create model with systemInstruction embedded
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: systemInstruction,
+      generationConfig: { responseMimeType: "application/json" }
     });
 
-    const result = await chatSession.sendMessage(userMessage || "Hello!");
+    // 3. Build safe history (must start with 'user', no blank entries)
+    const mappedHistory = (messageHistory || [])
+      .map(m => ({
+        role: m.role === "user" ? "user" : "model",
+        parts: [{ text: m.text || "" }]
+      }))
+      .filter(m => m.parts[0].text.trim() !== "");
+
+    const firstUserIndex = mappedHistory.findIndex(m => m.role === "user");
+    const safeHistory = firstUserIndex >= 0 ? mappedHistory.slice(firstUserIndex) : [];
+
+    // 4. Use generateContent instead of startChat — avoids all history validation issues
+    const contents = [
+      ...safeHistory,
+      { role: "user", parts: [{ text: userMessage || "Hello!" }] }
+    ];
+
+    const result = await model.generateContent({ contents });
     const responseText = result.response.text();
 
     try {
